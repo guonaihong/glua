@@ -9,6 +9,7 @@ import (
 	"github.com/guonaihong/glua/lib/strings"
 	"github.com/guonaihong/glua/lib/time"
 	"github.com/guonaihong/glua/lib/uuid"
+	"github.com/guonaihong/glua/lib/websocket"
 	"github.com/yuin/gopher-lua"
 	"io/ioutil"
 	"os"
@@ -23,6 +24,7 @@ func main() {
 	L.PreloadModule("log", log.Loader)
 	L.PreloadModule("uuid", uuid.Loader)
 	L.PreloadModule("json", json.Loader)
+	L.PreloadModule("websocket", websocket.Loader)
 
 	for _, v := range os.Args[1:] {
 		all, err := ioutil.ReadFile(v)

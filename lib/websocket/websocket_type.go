@@ -1,13 +1,11 @@
 package websocket
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	gowebsocket "github.com/gorilla/websocket"
 	"github.com/yuin/gopher-lua"
-	"io"
-	"net"
+	"net/http"
 	_ "strconv"
 	"strings"
 	"time"
@@ -35,22 +33,46 @@ func newWebSocket(L *lua.LState) int {
 	return 1
 }
 
+func headersAdd(header []string, reqHeader http.Header) {
+
+	for _, v := range header {
+
+		headers := strings.Split(v, ":")
+
+		if len(headers) != 2 {
+			continue
+		}
+
+		headers[0] = strings.TrimSpace(headers[0])
+		headers[1] = strings.TrimSpace(headers[1])
+
+		reqHeader.Add(headers[0], headers[1])
+	}
+
+	reqHeader.Set("Accept", "*/*")
+
+}
+
 func connect(L *lua.LState) int {
 	s := checkSocket(L)
 
 	addr := L.CheckString(2)
+	headerTb := L.ToTable(3)
 	var err error
+	var header []string
+	reqHeader := http.Header{}
 
-	c, _, err := websocket.DefaultDialer.Dial(u1.String(), header)
-	if err != nil {
-		return nil, err
-	}
+	headerTb.ForEach(func(_ lua.LValue, value lua.LValue) {
+		header = append(header, value.String())
+	})
 
-	s.Conn, err = net.Dial("tcp", addr)
+	headersAdd(header, reqHeader)
+	c, _, err := gowebsocket.DefaultDialer.Dial(addr, reqHeader)
 	if err != nil {
 		L.ArgError(1, err.Error())
-		return 0
 	}
+
+	s.Conn = c
 
 	return 1
 }
@@ -73,9 +95,7 @@ func parseTime(s string) time.Duration {
 func read(L *lua.LState) int {
 	s := checkSocket(L)
 
-	n := L.ToInt(2)
-
-	if top := L.GetTop(); top == 3 {
+	if top := L.GetTop(); top == 2 {
 		arg3 := L.ToString(3)
 		if arg3 != "" {
 			err := s.SetReadDeadline(time.Now().Add(parseTime(arg3)))
@@ -84,26 +104,34 @@ func read(L *lua.LState) int {
 		}
 	}
 
-	body := make([]byte, n)
-	n1, err := io.ReadFull(s.Conn, body)
+	mt, message, err := s.Conn.ReadMessage()
 	if err != nil {
 		L.Push(lua.LNil)
+		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
-		return 2
+		return 3
 	}
 
-	if top := L.GetTop(); top == 3 {
+	if top := L.GetTop(); top == 2 {
 		s.SetReadDeadline(time.Time{})
 	}
-	L.Push(lua.LString(body[:n1]))
+
+	mtMessage := "text"
+	if mt == gowebsocket.BinaryMessage {
+		mtMessage = "binary"
+	}
+
+	L.Push(lua.LString(mtMessage))
+	L.Push(lua.LString(message))
 	return 1
 }
 
 func write(L *lua.LState) int {
 	s := checkSocket(L)
-	data := L.CheckString(2)
+	mtMessage := L.CheckString(2)
+	data := L.CheckString(3)
 
-	if top := L.GetTop(); top == 3 {
+	if top := L.GetTop(); top == 4 {
 		arg3 := L.ToString(3)
 		if arg3 != "" {
 			err := s.SetWriteDeadline(time.Now().Add(parseTime(arg3)))
@@ -111,19 +139,23 @@ func write(L *lua.LState) int {
 			}
 		}
 	}
-	n, err := s.Conn.Write([]byte(data))
-	if err != nil {
-		L.Push(lua.LNumber(0))
-		L.Push(lua.LString(err.Error()))
-		return 2
+
+	mt := gowebsocket.TextMessage
+	if mtMessage == "binary" {
+		mt = gowebsocket.BinaryMessage
 	}
 
-	if top := L.GetTop(); top == 3 {
+	err := s.Conn.WriteMessage(mt, []byte(data))
+	if err != nil {
+		L.Push(lua.LString(err.Error()))
+		return 1
+	}
+
+	if top := L.GetTop(); top == 4 {
 		s.SetWriteDeadline(time.Time{})
 	}
 
-	L.Push(lua.LNumber(n))
-	return 1
+	return 0
 }
 
 func websocketClose(L *lua.LState) int {
