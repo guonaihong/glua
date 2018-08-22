@@ -70,6 +70,7 @@ func connect(L *lua.LState) int {
 	c, _, err := gowebsocket.DefaultDialer.Dial(addr, reqHeader)
 	if err != nil {
 		L.ArgError(1, err.Error())
+		return 0
 	}
 
 	s.Conn = c
@@ -123,7 +124,7 @@ func read(L *lua.LState) int {
 
 	L.Push(lua.LString(mtMessage))
 	L.Push(lua.LString(message))
-	return 1
+	return 2
 }
 
 func write(L *lua.LState) int {
