@@ -11,8 +11,9 @@ func format(L *lua.LState) int {
 	out := &bytes.Buffer{}
 	err := gojson.Indent(out, []byte(j), "", "  ")
 	if err != nil {
-		L.ArgError(1, "json expected: "+err.Error())
-		return 0
+		//L.ArgError(1, "json expected: "+err.Error())
+		L.Push(lua.LString(j))
+		return 1
 	}
 
 	L.Push(lua.LString(out.String()))
