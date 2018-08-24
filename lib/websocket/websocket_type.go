@@ -69,13 +69,13 @@ func connect(L *lua.LState) int {
 	headersAdd(header, reqHeader)
 	c, _, err := gowebsocket.DefaultDialer.Dial(addr, reqHeader)
 	if err != nil {
-		L.ArgError(1, err.Error())
-		return 0
+		L.Push(lua.LString(err.Error()))
+		return 1
 	}
 
 	s.Conn = c
 
-	return 1
+	return 0
 }
 
 func parseTime(s string) time.Duration {
